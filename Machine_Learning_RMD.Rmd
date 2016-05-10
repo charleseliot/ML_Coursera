@@ -1,0 +1,105 @@
+---
+title: "Machine Learning Project"
+output: pdf_document
+---
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+Those 5 ways are stored in a the "classe" categorical variable, with A being the correct way the exercise is performed. The others levels of the variable, "B","C","D","E", will correspond to common mistakes with the exercise. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The objective of the exercise is to predict the correct "classe" in a train dataset using the other variables available. 
+
+As a first step we will load the data after downloading it from the Coursera location. We will allocate the training dataset to the variable "tr" before splitting it into a train and test dataset at a later stage. 
+
+```{r, echo=FALSE}
+pml.training <- read.csv("~/Downloads/pml-training.csv", stringsAsFactors=FALSE)
+tr <- pml.training
+```
+
+A key element to handle the prediction algorythm is to have a good NA strategy. 
+
+```{r}
+na <- function (x) {sum(is.na(x))}
+nacheck <- as.data.frame(apply(tr,2,na))
+summary(nacheck[[1]])
+```
+
+The code above will allow a quick inspection of the data, which reveals that a few columns have a considerable amount of NAs.
+
+For convenience we will remove all the column where the ratio between the count of missing or NA values and the length of the column is greater than the 50%. We could use a more aggressive strategy, but this will make the trick.
+
+```{r}
+missing <- NULL
+natest <- NULL
+for (i in 1:dim(tr)[2]){
+  natest[i] <- sum(is.na(tr[,i]))/length(tr[,i]) 
+  missing[i] <- length(which(tr[,i] == ""))/length(tr[,i])
+}
+
+nac <- (which(natest > 0.5))*-1
+mic <- (which(missing >0.5))*-1
+colremove <- c(nac,mic)
+tr2 <- tr[, colremove]
+dim(tr2)
+```
+
+The logic has allowed us to exclude about 100 columns from the algorythm:
+
+```{r}
+dim(tr)[2]-dim(tr2)[2]
+```
+
+Next step will be fitting a model, but first we will split the dataset into a training and test set, using the Caret Package:
+
+
+```{r}
+library("caret")
+inTrain <- createDataPartition(y=tr2$classe,
+                               p=0.8, list=FALSE)
+training <- tr2[inTrain,]
+testing <- tr2[-inTrain,]
+dim(training); dim(testing)
+```
+
+After this step we will try to fit a model. The first algorythm we will try is the rpart, using the CART version of Classification Trees:
+
+
+```{r}
+modFit <<- train(classe ~ .,method="rpart", data=training)
+print(modFit$finalModel)
+predictions <- predict(modFit,newdata=testing)
+```
+
+
+Both the confusion matrix and the predictions accuracy indicator show very disappointing results when using this model.
+
+```{r}
+table(predictions,testing$classe)
+sum(diag(table(predictions,testing$classe)))/dim(testing)[1]
+```
+
+We will try to switch to the more advance RandomForest from the relevant package:
+
+
+```{r}
+library(randomForest)
+training2 <- training[,c(8:60)]
+modFit_2 <- randomForest(training2$classe ~ .,   data=training2, do.trace=F)
+print(modFit_2)
+testing2 <- testing[,c(8:60)]
+predictions_2 <- predict(modFit_2,newdata=testing2)
+```
+
+
+Both the confusion matrix and the Accuracy indicator will reveal an almost optimal results:
+
+```{r}
+table(predictions_2,testing2$classe)
+sum(diag(table(predictions_2,testing2$classe)))/dim(testing2)[1]
+```
+
+Our prediction is near to perfection!
+
+
+Giovanni Bruner
+
